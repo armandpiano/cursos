@@ -1,0 +1,20 @@
+:root{--brand:#0d6efd}
+body{
+  font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+  background:
+    radial-gradient(1200px 600px at 80% -10%,rgba(13,110,253,.15),transparent 60%),
+    radial-gradient(800px 400px at -10% 110%,rgba(13,110,253,.1),transparent 50%);
+}
+.card{border:none;border-radius:1.25rem;box-shadow:0 10px 30px rgba(0,0,0,.08);}
+.brand-badge{display:inline-flex;align-items:center;gap:.5rem;padding:.4rem .75rem;border-radius:999px;background:rgba(13,110,253,.1);color:var(--brand);font-weight:600}
+.google-btn{
+  display:flex;align-items:center;justify-content:center;gap:.6rem;
+  border:1px solid rgba(0,0,0,.12);border-radius:.75rem;padding:.65rem 1rem;
+  font-weight:600;background:#fff;transition:.2s; text-decoration:none; color:#111
+}
+.google-btn:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(0,0,0,.08)}
+.google-logo{width:20px;height:20px}
+.helper{font-size:.925rem;color:#6c757d}
+.form-control{border-radius:.75rem;padding:.7rem .9rem}
+.small-link{font-size:.9rem}
+footer{color:#6c757d}
