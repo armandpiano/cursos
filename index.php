@@ -160,11 +160,13 @@ if (isset($_GET['code'])) {
 
         // Sesión mínima
         $_SESSION['user'] = [
-            'id'      => $dbUser['id'],
-            'ext_id'  => $profile['sub'] ?? null,
-            'name'    => $dbUser['name'] ?? 'Usuario',
-            'email'   => $dbUser['email'] ?? null,
-            'picture' => $dbUser['picture'] ?? null,
+            'id'         => $dbUser['id'],
+            'ext_id'     => $profile['sub'] ?? null,
+            'name'       => $dbUser['name'] ?? 'Usuario',
+            'email'      => $dbUser['email'] ?? null,
+            'avatar_url' => $dbUser['avatar_url'] ?? null,
+            'picture'    => $dbUser['avatar_url'] ?? null,
+            'role'       => $dbUser['role'] ?? null,
         ];
 
         // 👉 Redirige a la página protegida
