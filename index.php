@@ -80,9 +80,13 @@ function http_post_json(string $url, array $data): array {
     $err  = curl_error($ch);
     $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
-    if ($err) throw new Exception('Error cURL: ' . $err);
+    if ($err) {
+        throw new \Exception('Error cURL: ' . $err);
+    }
     $json = json_decode($resp, true) ?? [];
-    if ($code >= 400) throw new Exception('HTTP '.$code.' → '.($json['error_description'] ?? $json['error'] ?? 'Error de token'));
+    if ($code >= 400) {
+        throw new \Exception('HTTP ' . $code . ' → ' . ($json['error_description'] ?? $json['error'] ?? 'Error de token'));
+    }
     return $json;
 }
 function http_get_json(string $url, array $headers = []): array {
@@ -96,9 +100,13 @@ function http_get_json(string $url, array $headers = []): array {
     $err  = curl_error($ch);
     $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
-    if ($err) throw new Exception('Error cURL: ' . $err);
+    if ($err) {
+        throw new \Exception('Error cURL: ' . $err);
+    }
     $json = json_decode($resp, true) ?? [];
-    if ($code >= 400) throw new Exception('HTTP '.$code.' → '.($json['error_description'] ?? $json['error'] ?? 'Error de API'));
+    if ($code >= 400) {
+        throw new \Exception('HTTP ' . $code . ' → ' . ($json['error_description'] ?? $json['error'] ?? 'Error de API'));
+    }
     return $json;
 }
 
@@ -150,7 +158,9 @@ if (isset($_GET['code'])) {
 
         $access_token  = $token['access_token']  ?? null;
         $refresh_token = $token['refresh_token'] ?? null; // puede venir la primera vez
-        if (!$access_token) throw new Exception('No se recibió access_token.');
+        if (!$access_token) {
+            throw new \Exception('No se recibió access_token.');
+        }
 
         // Obtener perfil
         $profile = http_get_json(USERINFO, ['Authorization: Bearer ' . $access_token]);
@@ -160,18 +170,20 @@ if (isset($_GET['code'])) {
 
         // Sesión mínima
         $_SESSION['user'] = [
-            'id'      => $dbUser['id'],
-            'ext_id'  => $profile['sub'] ?? null,
-            'name'    => $dbUser['name'] ?? 'Usuario',
-            'email'   => $dbUser['email'] ?? null,
-            'picture' => $dbUser['picture'] ?? null,
+            'id'         => $dbUser['id'],
+            'ext_id'     => $profile['sub'] ?? null,
+            'name'       => $dbUser['name'] ?? 'Usuario',
+            'email'      => $dbUser['email'] ?? null,
+            'avatar_url' => $dbUser['avatar_url'] ?? null,
+            'picture'    => $dbUser['avatar_url'] ?? null,
+            'role'       => $dbUser['role'] ?? null,
         ];
 
         // 👉 Redirige a la página protegida
         header('Location: ' . url_to('cursos.php'));
         exit;
 
-    } catch (Exception $e) {
+    } catch (\Exception $e) {
         http_response_code(400);
         render_error('No se pudo iniciar sesión', 'Descripción: ' . htmlspecialchars($e->getMessage()));
         exit;
