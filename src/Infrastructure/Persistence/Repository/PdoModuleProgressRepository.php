@@ -8,8 +8,12 @@ use PDO;
 
 class PdoModuleProgressRepository implements ModuleProgressRepositoryInterface
 {
-    public function __construct(private readonly PDO $pdo)
+    /** @var PDO */
+    private $pdo;
+
+    public function __construct(PDO $pdo)
     {
+        $this->pdo = $pdo;
     }
 
     public function findByEnrollment(int $enrollmentId): array
@@ -17,7 +21,10 @@ class PdoModuleProgressRepository implements ModuleProgressRepositoryInterface
         $stmt = $this->pdo->prepare('SELECT * FROM module_progress WHERE enrollment_id = :enrollment');
         $stmt->execute([':enrollment' => $enrollmentId]);
         $rows = $stmt->fetchAll();
-        return array_map(fn ($row) => $this->hydrate($row), $rows);
+
+        return array_map(function ($row) {
+            return $this->hydrate($row);
+        }, $rows);
     }
 
     public function findByEnrollmentAndModule(int $enrollmentId, int $moduleId): ?ModuleProgress
@@ -47,6 +54,7 @@ class PdoModuleProgressRepository implements ModuleProgressRepositoryInterface
     {
         $set = 'last_score = :score, last_attempt_at = NOW(), attempts = attempts + 1, updated_at = NOW()';
         $params = [':score' => $score, ':id' => $progressId];
+
         if ($passed) {
             $set .= ', best_score = GREATEST(COALESCE(best_score, 0), :score), completed_at = COALESCE(completed_at, NOW()), status = :status';
             $params[':status'] = ModuleProgress::STATUS_COMPLETED;
@@ -90,9 +98,9 @@ class PdoModuleProgressRepository implements ModuleProgressRepositoryInterface
             (string) $row['status'],
             isset($row['best_score']) ? (float) $row['best_score'] : null,
             isset($row['last_score']) ? (float) $row['last_score'] : null,
-            isset($row['last_attempt_at']) && $row['last_attempt_at'] ? new DateTimeImmutable($row['last_attempt_at']) : null,
+            (isset($row['last_attempt_at']) && $row['last_attempt_at']) ? new DateTimeImmutable($row['last_attempt_at']) : null,
             (int) ($row['attempts'] ?? 0),
-            isset($row['completed_at']) && $row['completed_at'] ? new DateTimeImmutable($row['completed_at']) : null
+            (isset($row['completed_at']) && $row['completed_at']) ? new DateTimeImmutable($row['completed_at']) : null
         );
     }
 }

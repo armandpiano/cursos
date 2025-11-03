@@ -7,15 +7,21 @@ use PDO;
 
 class PdoCourseRepository implements CourseRepositoryInterface
 {
-    public function __construct(private readonly PDO $pdo)
+    /** @var PDO */
+    private $pdo;
+
+    public function __construct(PDO $pdo)
     {
+        $this->pdo = $pdo;
     }
 
     public function findAll(): array
     {
         $stmt = $this->pdo->query('SELECT id, slug, title, description, image_url FROM courses ORDER BY title');
         $rows = $stmt->fetchAll();
-        return array_map(fn ($row) => $this->hydrate($row), $rows);
+        return array_map(function($row) {
+                return $this->hydrate($row);
+            }, $rows);
     }
 
     public function findById(int $id): ?Course
@@ -29,9 +35,9 @@ class PdoCourseRepository implements CourseRepositoryInterface
     private function hydrate(array $row): Course
     {
         return new Course(
-            (int) $row['id'],
-            (string) $row['slug'],
-            (string) $row['title'],
+            (int)$row['id'],
+            (string)$row['slug'],
+            (string)$row['title'],
             $row['description'] ?? null,
             $row['image_url'] ?? null
         );
