@@ -45,6 +45,21 @@ class ModuleProgressDto
     /** @var string|null */
     public $contentUrl;
 
+    /** @var int */
+    public $capsulesCompleted;
+
+    /** @var int */
+    public $capsulesTotal;
+
+    /** @var float */
+    public $progressPercentage;
+
+    /** @var bool */
+    public $examAvailable;
+
+    /** @var bool */
+    public $examPassed;
+
     public function __construct(
         int $id,
         int $moduleId,
@@ -59,7 +74,12 @@ class ModuleProgressDto
         int $attempts,
         int $passScore,
         int $maxScore,
-        ?string $contentUrl
+        ?string $contentUrl,
+        int $capsulesCompleted,
+        int $capsulesTotal,
+        float $progressPercentage,
+        bool $examAvailable,
+        bool $examPassed
     ) {
         $this->id = $id;
         $this->moduleId = $moduleId;
@@ -75,5 +95,10 @@ class ModuleProgressDto
         $this->passScore = $passScore;
         $this->maxScore = $maxScore;
         $this->contentUrl = $contentUrl;
+        $this->capsulesCompleted = $capsulesCompleted;
+        $this->capsulesTotal = $capsulesTotal;
+        $this->progressPercentage = $progressPercentage;
+        $this->examAvailable = $examAvailable;
+        $this->examPassed = $examPassed;
     }
 }

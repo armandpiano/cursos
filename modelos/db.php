@@ -73,6 +73,20 @@ function ensure_schema(\PDO $pdo): void
         CONSTRAINT fk_module_course FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci');
 
+    $pdo->exec('CREATE TABLE IF NOT EXISTS capsules (
+        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+        module_id BIGINT UNSIGNED NOT NULL,
+        title VARCHAR(190) NOT NULL,
+        body_html MEDIUMTEXT NULL,
+        video_url VARCHAR(255) NULL,
+        order_index INT NOT NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY uq_capsule_module_order (module_id, order_index),
+        CONSTRAINT fk_capsule_module FOREIGN KEY (module_id) REFERENCES modules(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci');
+
     $pdo->exec('CREATE TABLE IF NOT EXISTS enrollments (
         id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
         user_id BIGINT UNSIGNED NOT NULL,
@@ -102,6 +116,20 @@ function ensure_schema(\PDO $pdo): void
         CONSTRAINT fk_progress_module FOREIGN KEY (module_id) REFERENCES modules(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci');
 
+    $pdo->exec('CREATE TABLE IF NOT EXISTS capsule_progress (
+        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+        module_progress_id BIGINT UNSIGNED NOT NULL,
+        capsule_id BIGINT UNSIGNED NOT NULL,
+        status ENUM("pending", "completed") NOT NULL DEFAULT "pending",
+        completed_at DATETIME NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY uq_capsule_progress (module_progress_id, capsule_id),
+        CONSTRAINT fk_capsule_progress_module FOREIGN KEY (module_progress_id) REFERENCES module_progress(id) ON DELETE CASCADE,
+        CONSTRAINT fk_capsule_progress_capsule FOREIGN KEY (capsule_id) REFERENCES capsules(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci');
+
     $pdo->exec('CREATE TABLE IF NOT EXISTS exam_attempts (
         id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
         module_progress_id BIGINT UNSIGNED NOT NULL,
@@ -113,6 +141,33 @@ function ensure_schema(\PDO $pdo): void
         PRIMARY KEY (id),
         KEY ix_attempt_progress (module_progress_id),
         CONSTRAINT fk_attempt_progress FOREIGN KEY (module_progress_id) REFERENCES module_progress(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci');
+
+    $pdo->exec('CREATE TABLE IF NOT EXISTS module_exam_questions (
+        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+        module_id BIGINT UNSIGNED NOT NULL,
+        question_text TEXT NOT NULL,
+        explanation TEXT NULL,
+        correct_answer TINYINT(1) NOT NULL DEFAULT 1,
+        order_index INT NOT NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY uq_exam_question_order (module_id, order_index),
+        CONSTRAINT fk_exam_question_module FOREIGN KEY (module_id) REFERENCES modules(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci');
+
+    $pdo->exec('CREATE TABLE IF NOT EXISTS exam_attempt_answers (
+        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+        exam_attempt_id BIGINT UNSIGNED NOT NULL,
+        question_id BIGINT UNSIGNED NOT NULL,
+        selected_answer TINYINT(1) NOT NULL,
+        is_correct TINYINT(1) NOT NULL DEFAULT 0,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        KEY ix_attempt_answers_attempt (exam_attempt_id),
+        CONSTRAINT fk_attempt_answer_attempt FOREIGN KEY (exam_attempt_id) REFERENCES exam_attempts(id) ON DELETE CASCADE,
+        CONSTRAINT fk_attempt_answer_question FOREIGN KEY (question_id) REFERENCES module_exam_questions(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci');
 
     seed_courses($pdo);
@@ -153,6 +208,9 @@ function seed_courses(\PDO $pdo): void
             ['course' => 'atencion-al-cliente', 'title' => 'Gestión de casos especiales', 'order' => 2],
         ];
 
+        $capsuleStmt = $pdo->prepare('INSERT INTO capsules (module_id, title, body_html, video_url, order_index, created_at, updated_at) VALUES (:module_id, :title, :body_html, :video_url, :order_index, NOW(), NOW())');
+        $questionStmt = $pdo->prepare('INSERT INTO module_exam_questions (module_id, question_text, explanation, correct_answer, order_index, created_at, updated_at) VALUES (:module_id, :question_text, :explanation, :correct_answer, :order_index, NOW(), NOW())');
+
         foreach ($modules as $module) {
             $moduleStmt->execute([
                 ':course_id' => $courseIds[$module['course']],
@@ -163,6 +221,62 @@ function seed_courses(\PDO $pdo): void
                 ':pass_score' => 80,
                 ':max_score' => 100,
             ]);
+
+            $moduleId = (int) $pdo->lastInsertId();
+
+            $sampleCapsules = [
+                [
+                    'title' => 'Introducción',
+                    'body' => '<p>Bienvenid@ al módulo "' . $module['title'] . '". En esta cápsula conocerás los objetivos generales y la importancia del tema.</p>',
+                ],
+                [
+                    'title' => 'Buenas prácticas',
+                    'body' => '<p>Explora las buenas prácticas clave que debes aplicar en tu día a día para asegurar la calidad en cada entrega.</p>',
+                ],
+                [
+                    'title' => 'Casos aplicados',
+                    'body' => '<p>Analiza casos reales para identificar oportunidades de mejora y fortalezas de los procesos actuales.</p>',
+                ],
+            ];
+
+            $order = 1;
+            foreach ($sampleCapsules as $capsule) {
+                $capsuleStmt->execute([
+                    ':module_id' => $moduleId,
+                    ':title' => $capsule['title'],
+                    ':body_html' => $capsule['body'],
+                    ':video_url' => null,
+                    ':order_index' => $order,
+                ]);
+                $order++;
+            }
+
+            $questions = [
+                [
+                    'text' => 'Las buenas prácticas logísticas garantizan entregas seguras y puntuales.',
+                    'answer' => 1,
+                ],
+                [
+                    'text' => 'No es necesario registrar incidencias si el cliente está conforme.',
+                    'answer' => 0,
+                ],
+                [
+                    'text' => 'El cumplimiento normativo depende sólo del área de calidad.',
+                    'answer' => 0,
+                ],
+            ];
+
+            $qOrder = 1;
+            foreach ($questions as $question) {
+                $questionStmt->execute([
+                    ':module_id' => $moduleId,
+                    ':question_text' => $question['text'],
+                    ':explanation' => 'Revisa los lineamientos del módulo para reforzar este concepto.',
+                    ':correct_answer' => $question['answer'],
+                    ':order_index' => $qOrder,
+                ]);
+                $qOrder++;
+            }
         }
 
         $pdo->commit();

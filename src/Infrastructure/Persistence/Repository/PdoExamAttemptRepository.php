@@ -37,6 +37,17 @@ class PdoExamAttemptRepository implements ExamAttemptRepositoryInterface
         return $row ? $this->hydrate($row) : null;
     }
 
+    public function recordAnswer(int $attemptId, int $questionId, bool $selectedAnswer, bool $isCorrect): void
+    {
+        $stmt = $this->pdo->prepare('INSERT INTO exam_attempt_answers (exam_attempt_id, question_id, selected_answer, is_correct, created_at) VALUES (:attempt, :question, :selected, :is_correct, NOW())');
+        $stmt->execute([
+            ':attempt' => $attemptId,
+            ':question' => $questionId,
+            ':selected' => $selectedAnswer ? 1 : 0,
+            ':is_correct' => $isCorrect ? 1 : 0,
+        ]);
+    }
+
     private function getById(int $id): ExamAttempt
     {
         $stmt = $this->pdo->prepare('SELECT * FROM exam_attempts WHERE id = :id');

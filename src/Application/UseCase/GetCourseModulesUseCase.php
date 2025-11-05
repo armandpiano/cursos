@@ -3,9 +3,13 @@ namespace App\Application\UseCase;
 
 use App\Application\DTO\CourseModulesDto;
 use App\Application\DTO\ModuleProgressDto;
+use App\Domain\Entity\CapsuleProgress;
 use App\Domain\Entity\ModuleProgress;
+use App\Domain\Repository\CapsuleProgressRepositoryInterface;
+use App\Domain\Repository\CapsuleRepositoryInterface;
 use App\Domain\Repository\CourseRepositoryInterface;
 use App\Domain\Repository\EnrollmentRepositoryInterface;
+use App\Domain\Repository\ModuleExamQuestionRepositoryInterface;
 use App\Domain\Repository\ModuleProgressRepositoryInterface;
 use App\Domain\Repository\ModuleRepositoryInterface;
 use InvalidArgumentException;
@@ -24,16 +28,31 @@ class GetCourseModulesUseCase
     /** @var ModuleProgressRepositoryInterface */
     private $moduleProgressRepository;
 
+    /** @var CapsuleRepositoryInterface */
+    private $capsuleRepository;
+
+    /** @var CapsuleProgressRepositoryInterface */
+    private $capsuleProgressRepository;
+
+    /** @var ModuleExamQuestionRepositoryInterface */
+    private $examQuestionRepository;
+
     public function __construct(
         CourseRepositoryInterface $courseRepository,
         ModuleRepositoryInterface $moduleRepository,
         EnrollmentRepositoryInterface $enrollmentRepository,
-        ModuleProgressRepositoryInterface $moduleProgressRepository
+        ModuleProgressRepositoryInterface $moduleProgressRepository,
+        CapsuleRepositoryInterface $capsuleRepository,
+        CapsuleProgressRepositoryInterface $capsuleProgressRepository,
+        ModuleExamQuestionRepositoryInterface $examQuestionRepository
     ) {
         $this->courseRepository = $courseRepository;
         $this->moduleRepository = $moduleRepository;
         $this->enrollmentRepository = $enrollmentRepository;
         $this->moduleProgressRepository = $moduleProgressRepository;
+        $this->capsuleRepository = $capsuleRepository;
+        $this->capsuleProgressRepository = $capsuleProgressRepository;
+        $this->examQuestionRepository = $examQuestionRepository;
     }
 
     public function execute(int $userId, int $courseId): CourseModulesDto
@@ -88,6 +107,29 @@ class GetCourseModulesUseCase
             }
 
             $isAvailable = $progress->getStatus() !== ModuleProgress::STATUS_LOCKED;
+            $capsules = $this->capsuleRepository->findByModule($module->getId());
+            $capsuleTotal = count($capsules);
+            $capsuleProgress = [];
+
+            foreach ($capsules as $capsule) {
+                $tracked = $this->capsuleProgressRepository->findByProgressAndCapsule($progress->getId(), $capsule->getId());
+                if (!$tracked) {
+                    $tracked = $this->capsuleProgressRepository->createPending($progress->getId(), $capsule->getId());
+                }
+                $capsuleProgress[$capsule->getId()] = $tracked;
+            }
+
+            $completedCapsules = 0;
+            foreach ($capsuleProgress as $capsuleEntry) {
+                if ($capsuleEntry->getStatus() === CapsuleProgress::STATUS_COMPLETED) {
+                    $completedCapsules++;
+                }
+            }
+
+            $examQuestionCount = $this->examQuestionRepository->countByModule($module->getId());
+            $examAvailable = $capsuleTotal > 0 && $completedCapsules === $capsuleTotal;
+            $examPassed = $progress->getStatus() === ModuleProgress::STATUS_COMPLETED;
+
             if ($progress->getStatus() === ModuleProgress::STATUS_COMPLETED) {
                 $previousCompleted = true;
                 $completedModules++;
@@ -97,6 +139,15 @@ class GetCourseModulesUseCase
 
             $lastAttempt = $progress->getLastAttemptAt();
             $lastAttemptAt = $lastAttempt ? $lastAttempt->format('Y-m-d H:i') : null;
+
+            $progressPercentage = 0.0;
+            if ($capsuleTotal > 0) {
+                $progressPercentage = round(($completedCapsules / $capsuleTotal) * 100, 2);
+            }
+
+            if ($examPassed) {
+                $progressPercentage = 100.0;
+            }
 
             $moduleDtos[] = new ModuleProgressDto(
                 $progress->getId(),
@@ -112,7 +163,12 @@ class GetCourseModulesUseCase
                 $progress->getAttempts(),
                 $module->getPassScore(),
                 $module->getMaxScore(),
-                $module->getContentUrl()
+                $module->getContentUrl(),
+                $completedCapsules,
+                $capsuleTotal,
+                $progressPercentage,
+                $examQuestionCount > 0 ? $examAvailable : false,
+                $examPassed
             );
         }
 
