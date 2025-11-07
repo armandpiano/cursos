@@ -28,7 +28,7 @@ if (!file_exists($cfgPath)) {
           </div></main></body></html>';
     exit;
 }
-require_once $cfgPath; // define CLIENT_ID, CLIENT_SECRET, REDIRECT_URI
+$oauthConfig = load_oauth_config($cfgPath);
 
 /* ==========================
    CONST OAUTH
@@ -55,6 +55,33 @@ function url_to(string $file): string {
     // arma URL absoluta a un archivo en el mismo directorio del proyecto
     return scheme_host() . app_dir() . '/' . ltrim($file, '/');
 }
+function load_oauth_config(string $path): array {
+    $config = require $path;
+
+    if (is_array($config)) {
+        $clientId = isset($config['client_id']) ? $config['client_id'] : null;
+        $clientSecret = isset($config['client_secret']) ? $config['client_secret'] : null;
+        $redirectUri = isset($config['redirect_uri']) ? $config['redirect_uri'] : null;
+    } elseif (isset($oauthConfig) && is_array($oauthConfig)) {
+        $clientId = isset($oauthConfig['client_id']) ? $oauthConfig['client_id'] : null;
+        $clientSecret = isset($oauthConfig['client_secret']) ? $oauthConfig['client_secret'] : null;
+        $redirectUri = isset($oauthConfig['redirect_uri']) ? $oauthConfig['redirect_uri'] : null;
+    } else {
+        $clientId = defined('CLIENT_ID') ? CLIENT_ID : null;
+        $clientSecret = defined('CLIENT_SECRET') ? CLIENT_SECRET : null;
+        $redirectUri = defined('REDIRECT_URI') ? REDIRECT_URI : null;
+    }
+
+    if (!$clientId || !$clientSecret || !$redirectUri) {
+        throw new \RuntimeException('Configuración OAuth incompleta.');
+    }
+
+    return [
+        'client_id' => $clientId,
+        'client_secret' => $clientSecret,
+        'redirect_uri' => $redirectUri,
+    ];
+}
 function ensure_https_meta(): string {
     $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (($_SERVER['SERVER_PORT'] ?? null) == 443);
     return $https ? '<meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">' : '';
@@ -80,9 +107,13 @@ function http_post_json(string $url, array $data): array {
     $err  = curl_error($ch);
     $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
-    if ($err) throw new Exception('Error cURL: ' . $err);
+    if ($err) {
+        throw new \Exception('Error cURL: ' . $err);
+    }
     $json = json_decode($resp, true) ?? [];
-    if ($code >= 400) throw new Exception('HTTP '.$code.' → '.($json['error_description'] ?? $json['error'] ?? 'Error de token'));
+    if ($code >= 400) {
+        throw new \Exception('HTTP ' . $code . ' → ' . ($json['error_description'] ?? $json['error'] ?? 'Error de token'));
+    }
     return $json;
 }
 function http_get_json(string $url, array $headers = []): array {
@@ -96,9 +127,13 @@ function http_get_json(string $url, array $headers = []): array {
     $err  = curl_error($ch);
     $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
-    if ($err) throw new Exception('Error cURL: ' . $err);
+    if ($err) {
+        throw new \Exception('Error cURL: ' . $err);
+    }
     $json = json_decode($resp, true) ?? [];
-    if ($code >= 400) throw new Exception('HTTP '.$code.' → '.($json['error_description'] ?? $json['error'] ?? 'Error de API'));
+    if ($code >= 400) {
+        throw new \Exception('HTTP ' . $code . ' → ' . ($json['error_description'] ?? $json['error'] ?? 'Error de API'));
+    }
     return $json;
 }
 
@@ -142,15 +177,17 @@ if (isset($_GET['code'])) {
         // Intercambio de código por token
         $token = http_post_json(TOKEN_URL, [
             'code'          => $code,
-            'client_id'     => CLIENT_ID,
-            'client_secret' => CLIENT_SECRET,
-            'redirect_uri'  => REDIRECT_URI, // debe coincidir
+            'client_id'     => $oauthConfig['client_id'],
+            'client_secret' => $oauthConfig['client_secret'],
+            'redirect_uri'  => $oauthConfig['redirect_uri'], // debe coincidir
             'grant_type'    => 'authorization_code',
         ]);
 
         $access_token  = $token['access_token']  ?? null;
         $refresh_token = $token['refresh_token'] ?? null; // puede venir la primera vez
-        if (!$access_token) throw new Exception('No se recibió access_token.');
+        if (!$access_token) {
+            throw new \Exception('No se recibió access_token.');
+        }
 
         // Obtener perfil
         $profile = http_get_json(USERINFO, ['Authorization: Bearer ' . $access_token]);
@@ -160,18 +197,20 @@ if (isset($_GET['code'])) {
 
         // Sesión mínima
         $_SESSION['user'] = [
-            'id'      => $dbUser['id'],
-            'ext_id'  => $profile['sub'] ?? null,
-            'name'    => $dbUser['name'] ?? 'Usuario',
-            'email'   => $dbUser['email'] ?? null,
-            'picture' => $dbUser['picture'] ?? null,
+            'id'         => $dbUser['id'],
+            'ext_id'     => $profile['sub'] ?? null,
+            'name'       => $dbUser['name'] ?? 'Usuario',
+            'email'      => $dbUser['email'] ?? null,
+            'avatar_url' => $dbUser['avatar_url'] ?? null,
+            'picture'    => $dbUser['avatar_url'] ?? null,
+            'role'       => $dbUser['role'] ?? null,
         ];
 
         // 👉 Redirige a la página protegida
         header('Location: ' . url_to('cursos.php'));
         exit;
 
-    } catch (Exception $e) {
+    } catch (\Exception $e) {
         http_response_code(400);
         render_error('No se pudo iniciar sesión', 'Descripción: ' . htmlspecialchars($e->getMessage()));
         exit;
@@ -185,12 +224,14 @@ render_login();
 exit;
 
 function render_login(): void {
+    global $oauthConfig;
+
     $state = csrf_state();
 
     // Construir URL de autorización
     $authUrl = AUTH_URL . '?' . http_build_query([
-        'client_id'              => CLIENT_ID,
-        'redirect_uri'           => REDIRECT_URI, // apunta a index.php (este archivo)
+        'client_id'              => $oauthConfig['client_id'],
+        'redirect_uri'           => $oauthConfig['redirect_uri'], // apunta a index.php (este archivo)
         'response_type'          => 'code',
         'scope'                  => OAUTH_SCOPE,
         'access_type'            => 'offline',
