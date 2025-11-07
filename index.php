@@ -28,7 +28,7 @@ if (!file_exists($cfgPath)) {
           </div></main></body></html>';
     exit;
 }
-require_once $cfgPath; // define CLIENT_ID, CLIENT_SECRET, REDIRECT_URI
+$oauthConfig = load_oauth_config($cfgPath);
 
 /* ==========================
    CONST OAUTH
@@ -54,6 +54,33 @@ function app_dir(): string {
 function url_to(string $file): string {
     // arma URL absoluta a un archivo en el mismo directorio del proyecto
     return scheme_host() . app_dir() . '/' . ltrim($file, '/');
+}
+function load_oauth_config(string $path): array {
+    $config = require $path;
+
+    if (is_array($config)) {
+        $clientId = isset($config['client_id']) ? $config['client_id'] : null;
+        $clientSecret = isset($config['client_secret']) ? $config['client_secret'] : null;
+        $redirectUri = isset($config['redirect_uri']) ? $config['redirect_uri'] : null;
+    } elseif (isset($oauthConfig) && is_array($oauthConfig)) {
+        $clientId = isset($oauthConfig['client_id']) ? $oauthConfig['client_id'] : null;
+        $clientSecret = isset($oauthConfig['client_secret']) ? $oauthConfig['client_secret'] : null;
+        $redirectUri = isset($oauthConfig['redirect_uri']) ? $oauthConfig['redirect_uri'] : null;
+    } else {
+        $clientId = defined('CLIENT_ID') ? CLIENT_ID : null;
+        $clientSecret = defined('CLIENT_SECRET') ? CLIENT_SECRET : null;
+        $redirectUri = defined('REDIRECT_URI') ? REDIRECT_URI : null;
+    }
+
+    if (!$clientId || !$clientSecret || !$redirectUri) {
+        throw new \RuntimeException('Configuración OAuth incompleta.');
+    }
+
+    return [
+        'client_id' => $clientId,
+        'client_secret' => $clientSecret,
+        'redirect_uri' => $redirectUri,
+    ];
 }
 function ensure_https_meta(): string {
     $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (($_SERVER['SERVER_PORT'] ?? null) == 443);
@@ -150,9 +177,9 @@ if (isset($_GET['code'])) {
         // Intercambio de código por token
         $token = http_post_json(TOKEN_URL, [
             'code'          => $code,
-            'client_id'     => CLIENT_ID,
-            'client_secret' => CLIENT_SECRET,
-            'redirect_uri'  => REDIRECT_URI, // debe coincidir
+            'client_id'     => $oauthConfig['client_id'],
+            'client_secret' => $oauthConfig['client_secret'],
+            'redirect_uri'  => $oauthConfig['redirect_uri'], // debe coincidir
             'grant_type'    => 'authorization_code',
         ]);
 
@@ -197,12 +224,14 @@ render_login();
 exit;
 
 function render_login(): void {
+    global $oauthConfig;
+
     $state = csrf_state();
 
     // Construir URL de autorización
     $authUrl = AUTH_URL . '?' . http_build_query([
-        'client_id'              => CLIENT_ID,
-        'redirect_uri'           => REDIRECT_URI, // apunta a index.php (este archivo)
+        'client_id'              => $oauthConfig['client_id'],
+        'redirect_uri'           => $oauthConfig['redirect_uri'], // apunta a index.php (este archivo)
         'response_type'          => 'code',
         'scope'                  => OAUTH_SCOPE,
         'access_type'            => 'offline',
